@@ -1,0 +1,144 @@
+"""Embedded translations. Repository documentation stays in English."""
+
+from __future__ import annotations
+
+STRINGS: dict[str, dict[str, str]] = {
+    "en": {
+        "app.title": "SkayLauncher",
+        "tab.all": "All apps",
+        "tab.installed": "Installed",
+        "tab.updates": "Updates",
+        "search.placeholder": "Search apps, topics or descriptions",
+        "button.install": "Install",
+        "button.launch": "Launch",
+        "button.update": "Update",
+        "button.unavailable": "Unavailable for your OS",
+        "button.checking": "Checking...",
+        "button.installing": "Installing...",
+        "button.retry": "Retry",
+        "badge.new": "NEW",
+        "badge.installed": "INSTALLED",
+        "badge.update": "UPDATE",
+        "status.ready": "Ready",
+        "status.refreshing": "Refreshing GitHub...",
+        "status.updated": "Updated just now",
+        "status.error": "Refresh failed: {error}",
+        "menu.open_folder": "Open folder",
+        "menu.reinstall": "Reinstall",
+        "menu.uninstall": "Uninstall",
+        "menu.github": "Open on GitHub",
+        "menu.notes": "Patch notes",
+        "settings.title": "Settings",
+        "settings.language": "Language",
+        "settings.theme": "Theme",
+        "settings.forks": "Show forks",
+        "settings.startup_update": "Check launcher updates on start",
+        "settings.refresh": "Refresh interval (minutes)",
+        "settings.tray": "Minimize to tray",
+        "settings.notifications": "Desktop notifications",
+        "settings.token": "GitHub token (optional)",
+        "settings.save": "Save",
+        "settings.cancel": "Cancel",
+        "tray.open": "Open SkayLauncher",
+        "tray.quit": "Quit",
+        "tray.installed": "Installed apps",
+        "notes.title": "Patch notes - {name}",
+        "notes.no_release": "No release notes are available for this repository.",
+        "confirm.uninstall": "Remove {name} from this computer?",
+        "confirm.title": "Confirm",
+        "update.available": "Launcher update {version} is available",
+        "update.installed": "Launcher update will finish after restart",
+        "update.failed": "Launcher update failed: {error}",
+        "notify.new_repo": "New repository: {name}",
+        "notify.new_release": "New release: {name} {version}",
+        "empty.all": "No public repositories with releases were found.",
+        "empty.installed": "Nothing is installed yet.",
+        "empty.updates": "All installed apps are up to date.",
+        "speed": "{speed} MB/s - {remaining}s left",
+        "error.network": "Network error",
+        "error.verify": "Signature or checksum verification failed",
+        "error.install": "Installation failed: {error}",
+        "version.installed": "Installed v{version}",
+        "version.latest": "Latest v{version}",
+        "version.none": "No release",
+    },
+    "ru": {
+        "app.title": "SkayLauncher",
+        "tab.all": "Все программы",
+        "tab.installed": "Установленные",
+        "tab.updates": "Обновления",
+        "search.placeholder": "Поиск по названию, тегам и описанию",
+        "button.install": "Установить",
+        "button.launch": "Запустить",
+        "button.update": "Обновить",
+        "button.unavailable": "Недоступно для вашей ОС",
+        "button.checking": "Проверка...",
+        "button.installing": "Установка...",
+        "button.retry": "Повторить",
+        "badge.new": "НОВОЕ",
+        "badge.installed": "УСТАНОВЛЕНО",
+        "badge.update": "ОБНОВЛЕНИЕ",
+        "status.ready": "Готово",
+        "status.refreshing": "Обновление данных GitHub...",
+        "status.updated": "Обновлено только что",
+        "status.error": "Ошибка обновления: {error}",
+        "menu.open_folder": "Открыть папку",
+        "menu.reinstall": "Переустановить",
+        "menu.uninstall": "Удалить",
+        "menu.github": "Страница на GitHub",
+        "menu.notes": "Список изменений",
+        "settings.title": "Настройки",
+        "settings.language": "Язык",
+        "settings.theme": "Тема",
+        "settings.forks": "Показывать форки",
+        "settings.startup_update": "Проверять обновления лаунчера при запуске",
+        "settings.refresh": "Интервал обновления (минуты)",
+        "settings.tray": "Сворачивать в трей",
+        "settings.notifications": "Уведомления",
+        "settings.token": "Токен GitHub (необязательно)",
+        "settings.save": "Сохранить",
+        "settings.cancel": "Отмена",
+        "tray.open": "Открыть SkayLauncher",
+        "tray.quit": "Выход",
+        "tray.installed": "Установленные программы",
+        "notes.title": "Список изменений - {name}",
+        "notes.no_release": "Для этого репозитория нет списка изменений.",
+        "confirm.uninstall": "Удалить {name} с этого компьютера?",
+        "confirm.title": "Подтверждение",
+        "update.available": "Доступно обновление лаунчера {version}",
+        "update.installed": "Обновление лаунчера завершится после перезапуска",
+        "update.failed": "Ошибка обновления лаунчера: {error}",
+        "notify.new_repo": "Новый репозиторий: {name}",
+        "notify.new_release": "Новый релиз: {name} {version}",
+        "empty.all": "Публичные репозитории с релизами не найдены.",
+        "empty.installed": "Пока ничего не установлено.",
+        "empty.updates": "Все установленные программы актуальны.",
+        "speed": "{speed} МБ/с - осталось {remaining} с",
+        "error.network": "Ошибка сети",
+        "error.verify": "Ошибка проверки подписи или контрольной суммы",
+        "error.install": "Ошибка установки: {error}",
+        "version.installed": "Установлена v{version}",
+        "version.latest": "Последняя v{version}",
+        "version.none": "Нет релиза",
+    },
+}
+
+SUPPORTED_LANGUAGES = {"en": "English", "ru": "Русский"}
+SUPPORTED_THEMES = {"midnight": "Midnight", "graphite": "Graphite", "aurora": "Aurora"}
+
+
+class Translator:
+    def __init__(self, language: str = "en") -> None:
+        self.language = language if language in STRINGS else "en"
+
+    def set_language(self, language: str) -> None:
+        self.language = language if language in STRINGS else "en"
+
+    def tr(self, key: str, **values) -> str:
+        template = STRINGS.get(self.language, STRINGS["en"]).get(key)
+        if template is None:
+            template = STRINGS["en"].get(key, key)
+        try:
+            return template.format(**values)
+        except (KeyError, ValueError):
+            return template

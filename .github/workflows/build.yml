@@ -1,0 +1,271 @@
+name: Build signed release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload builds to"
+        required: false
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+
+env:
+  PYINSTALLER_VERSION: "6.22.3"
+  APPIMAGETOOL_VERSION: "1.9.1"
+  APPIMAGETOOL_SHA256: "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+
+jobs:
+  build-linux:
+    name: Linux AppImage (x86_64)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            pyproject.toml
+
+      - name: System dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-cursor0 libxkbcommon-x11-0 libegl1 libopengl0 \
+            libglib2.0-0 libssl3 ca-certificates desktop-file-utils
+
+      - name: Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Check signing key
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "RELEASE_SIGNING_KEY is required for release builds" >&2
+            exit 1
+          fi
+
+      - name: Download pinned appimagetool
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/appimagetool.AppImage" \
+            "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
+          echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool.AppImage" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/appimagetool.AppImage"
+
+      - name: Build AppImage
+        run: python tools/build_appimage.py "$RUNNER_TEMP/appimagetool.AppImage"
+
+      - name: Sign AppImage and write checksums
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: python tools/sign_release.py sign SkayLauncher-x86_64.AppImage
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: |
+            SkayLauncher-x86_64.AppImage
+            SkayLauncher-x86_64.AppImage.sig
+            SHA256SUMS
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows portable EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            pyproject.toml
+
+      - name: Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt pyinstaller==${{ env.PYINSTALLER_VERSION }}
+
+      - name: Check signing key
+        shell: bash
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "RELEASE_SIGNING_KEY is required for release builds" >&2
+            exit 1
+          fi
+
+      - name: Build with PyInstaller
+        shell: bash
+        run: |
+          pyinstaller SkayLauncher.spec --noconfirm \
+            --exclude-module PySide6.Qt3DAnimation \
+            --exclude-module PySide6.Qt3DCore \
+            --exclude-module PySide6.Qt3DExtras \
+            --exclude-module PySide6.Qt3DInput \
+            --exclude-module PySide6.Qt3DLogic \
+            --exclude-module PySide6.Qt3DRender \
+            --exclude-module PySide6.QtBluetooth \
+            --exclude-module PySide6.QtCharts \
+            --exclude-module PySide6.QtConcurrent \
+            --exclude-module PySide6.QtDataVisualization \
+            --exclude-module PySide6.QtDBus \
+            --exclude-module PySide6.QtDesigner \
+            --exclude-module PySide6.QtGraphs \
+            --exclude-module PySide6.QtGraphsWidgets \
+            --exclude-module PySide6.QtHelp \
+            --exclude-module PySide6.QtHttpServer \
+            --exclude-module PySide6.QtLocation \
+            --exclude-module PySide6.QtMultimedia \
+            --exclude-module PySide6.QtMultimediaWidgets \
+            --exclude-module PySide6.QtNetworkAuth \
+            --exclude-module PySide6.QtNfc \
+            --exclude-module PySide6.QtPdf \
+            --exclude-module PySide6.QtPdfWidgets \
+            --exclude-module PySide6.QtPositioning \
+            --exclude-module PySide6.QtQml \
+            --exclude-module PySide6.QtQuick \
+            --exclude-module PySide6.QtQuick3D \
+            --exclude-module PySide6.QtQuickControls2 \
+            --exclude-module PySide6.QtQuickTest \
+            --exclude-module PySide6.QtQuickWidgets \
+            --exclude-module PySide6.QtRemoteObjects \
+            --exclude-module PySide6.QtScxml \
+            --exclude-module PySide6.QtSensors \
+            --exclude-module PySide6.QtSerialBus \
+            --exclude-module PySide6.QtSerialPort \
+            --exclude-module PySide6.QtSpatialAudio \
+            --exclude-module PySide6.QtSql \
+            --exclude-module PySide6.QtStateMachine \
+            --exclude-module PySide6.QtSvg \
+            --exclude-module PySide6.QtSvgWidgets \
+            --exclude-module PySide6.QtTest \
+            --exclude-module PySide6.QtTextToSpeech \
+            --exclude-module PySide6.QtUiTools \
+            --exclude-module PySide6.QtWebChannel \
+            --exclude-module PySide6.QtWebEngineCore \
+            --exclude-module PySide6.QtWebEngineQuick \
+            --exclude-module PySide6.QtWebEngineWidgets \
+            --exclude-module PySide6.QtWebSocket \
+            --exclude-module PySide6.QtWebSockets \
+            --exclude-module PySide6.QtWebView
+
+      - name: Sign EXE and write checksums
+        working-directory: dist
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: python ../tools/sign_release.py sign SkayLauncher.exe
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            dist/SkayLauncher.exe
+            dist/SkayLauncher.exe.sig
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+  release:
+    name: Publish signed release assets
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install signing dependencies
+        run: python -m pip install "cryptography>=42"
+
+      - name: Check signing key
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "RELEASE_SIGNING_KEY is required for release builds" >&2
+            exit 1
+          fi
+
+      - name: Determine release tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="v1.0.0"
+          fi
+          case "$TAG" in
+            v*) ;;
+            *) TAG="v$TAG" ;;
+          esac
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Download Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release
+          path: release/linux
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: release/windows
+
+      - name: Assemble release assets
+        run: |
+          mkdir -p release/assets
+          cp release/linux/SkayLauncher-x86_64.AppImage release/assets/
+          cp release/linux/SkayLauncher-x86_64.AppImage.sig release/assets/
+          cp release/windows/SkayLauncher.exe release/assets/
+          cp release/windows/SkayLauncher.exe.sig release/assets/
+          cat release/linux/SHA256SUMS release/windows/SHA256SUMS | LC_ALL=C sort -k2 > release/assets/SHA256SUMS
+          cd release/assets
+          sha256sum -c SHA256SUMS
+
+      - name: Sign combined checksums
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: python tools/sign_release.py sign-only release/assets/SHA256SUMS
+
+      - name: Verify every release signature
+        run: |
+          cd release/assets
+          python ../../tools/sign_release.py verify SkayLauncher-x86_64.AppImage SkayLauncher-x86_64.AppImage.sig
+          python ../../tools/sign_release.py verify SkayLauncher.exe SkayLauncher.exe.sig
+          python ../../tools/sign_release.py verify SHA256SUMS SHA256SUMS.sig
+
+      - name: Upload to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            release/assets/SkayLauncher-x86_64.AppImage
+            release/assets/SkayLauncher-x86_64.AppImage.sig
+            release/assets/SkayLauncher.exe
+            release/assets/SkayLauncher.exe.sig
+            release/assets/SHA256SUMS
+            release/assets/SHA256SUMS.sig
