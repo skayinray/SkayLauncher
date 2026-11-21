@@ -1,16 +1,15 @@
-# SkayLauncher 1.0.0
+# SkayLauncher 1.0.1
 
-First signed release of the PySide6 desktop launcher for public `skayinray` GitHub releases.
+Maintenance release with installation discovery and responsive window layout.
 
-## Features
+## Changes
 
-- Discovers public `skayinray` repositories with releases and ignores forks by default.
-- Selects Linux AppImage or Windows EXE/ZIP assets for the current platform.
-- Installs, launches, reinstalls, updates, and removes apps from a local registry.
-- Verifies SHA-256 checksums and Ed25519 signatures before installing an asset.
-- Checks for launcher updates in packaged builds and applies signed updates.
-- Runs as a single instance with tray integration, search, tabs, patch notes, three themes, and English or Russian UI text.
-- Caches GitHub API responses with ETags and reports new repositories or releases in the UI and tray.
+- Detects apps installed outside the launcher, including AppImageLauncher files in `~/Applications`, `.desktop` entries, Windows uninstall registry records, and macOS bundles.
+- Shows detected apps with a **FOUND** badge; launching, reinstalling and forgetting them are supported. Forgetting never deletes the file on disk.
+- Adds `SKAYLAUNCHER_DISCOVERY_DIRS` for extra scan directories.
+- Lowers the minimum window size to 640x460 and adapts sidebar width, card columns and toolbar to the available space.
+- Fixes fullscreen: no transparent margins, no corner-resize handling, `F11` toggles fullscreen and `Esc` exits it.
+- Adds a fullscreen button to the custom title bar.
 
 ## Assets
 
@@ -29,8 +28,6 @@ python -m pip install -r requirements-dev.txt
 python tools/sign_release.py verify SkayLauncher-x86_64.AppImage SkayLauncher-x86_64.AppImage.sig
 sha256sum -c SHA256SUMS
 ```
-
-On Windows, verify `SkayLauncher.exe` and compare its SHA-256 value with `SHA256SUMS`.
 
 Ed25519 public key:
 
