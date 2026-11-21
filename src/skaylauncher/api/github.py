@@ -17,9 +17,9 @@ from typing import Any, Callable, Protocol
 from .cache import ResponseCache
 
 CHUNK_SIZE = 1024 * 1024
-SEGMENT_SIZE = 4 * 1024 * 1024
+SEGMENT_SIZE = 2 * 1024 * 1024
 MIN_SEGMENTED_SIZE = 8 * 1024 * 1024
-MAX_SEGMENTS = 8
+MAX_SEGMENTS = 16
 
 
 class Opener(Protocol):

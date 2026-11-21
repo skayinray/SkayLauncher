@@ -33,7 +33,7 @@ Add more directories with `SKAYLAUNCHER_DISCOVERY_DIRS` (a `PATH`-style separato
 
 ## Download performance
 
-Release assets are fetched over HTTPS. Files larger than 8 MiB are downloaded through up to eight parallel HTTP byte-range requests when the server supports them, which avoids the low per-connection throughput common with GitHub release CDN routes. If a range request fails, the launcher falls back to a single stream. GitHub API responses for individual repositories are also fetched in parallel.
+Release assets are fetched over HTTPS. Files larger than 8 MiB are downloaded through up to sixteen parallel HTTP byte-range requests (2 MiB segments) when the server supports them, which avoids the low per-connection throughput common with GitHub release CDN routes. If a range request fails, the launcher falls back to a single stream. GitHub API responses for individual repositories are also fetched in parallel.
 
 Set `SKAYLAUNCHER_DOWNLOAD_SEGMENTS=1` to disable parallel downloads (useful with proxies that reject range requests). Partial files are removed on failure; downloads are verified with `SHA256SUMS` and the Ed25519 signature after assembly.
 

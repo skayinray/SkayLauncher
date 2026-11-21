@@ -151,6 +151,17 @@ def test_download_asset_uses_parallel_ranges_for_large_files(tmp_path):
     assert not list(tmp_path.glob("*.part.*"))
 
 
+def test_large_asset_uses_sixteen_segments_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr("skaylauncher.api.github.SEGMENT_SIZE", 512 * 1024)
+    payload = bytes(range(256)) * (9 * 1024 * 1024 // 256)
+    opener = RangeOpener(payload)
+    client = GitHubClient(ResponseCache(tmp_path / "cache.json"), opener=opener)
+    target = client.download_asset("https://example.invalid/app.AppImage", tmp_path / "app.AppImage")
+    ranges = [request.get_header("Range") for request in opener.requests if request.get_header("Range")]
+    assert len(ranges) == 17  # one probe plus sixteen byte ranges
+    assert target.read_bytes() == payload
+
+
 class FlakyRangeOpener:
     def __init__(self, data: bytes) -> None:
         self.data = data
