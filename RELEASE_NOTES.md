@@ -1,15 +1,16 @@
-# SkayLauncher 1.0.1
+# SkayLauncher 1.0.2
 
-Maintenance release with installation discovery and responsive window layout.
+Performance release for slow GitHub downloads.
 
 ## Changes
 
-- Detects apps installed outside the launcher, including AppImageLauncher files in `~/Applications`, `.desktop` entries, Windows uninstall registry records, and macOS bundles.
-- Shows detected apps with a **FOUND** badge; launching, reinstalling and forgetting them are supported. Forgetting never deletes the file on disk.
-- Adds `SKAYLAUNCHER_DISCOVERY_DIRS` for extra scan directories.
-- Lowers the minimum window size to 640x460 and adapts sidebar width, card columns and toolbar to the available space.
-- Fixes fullscreen: no transparent margins, no corner-resize handling, `F11` toggles fullscreen and `Esc` exits it.
-- Adds a fullscreen button to the custom title bar.
+- Large release assets are downloaded with up to eight parallel HTTP byte-range requests, with automatic fallback to a single stream when ranges are unsupported.
+- GitHub release lookups for all repositories now run in parallel instead of one at a time.
+- Download and API caches are thread-safe; partial files are cleaned up after failed or cancelled downloads.
+- Raised the download socket timeout to 60 seconds for slow networks.
+- Added `SKAYLAUNCHER_DOWNLOAD_SEGMENTS=1` to disable parallel downloads for restrictive proxies.
+
+All downloads are still verified with SHA-256 checksums and the Ed25519 signature after assembly.
 
 ## Assets
 

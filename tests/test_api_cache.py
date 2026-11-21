@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -85,7 +86,12 @@ def test_client_raises_without_cached_data(tmp_path):
 
 
 def test_download_asset_streams_and_calls_progress(tmp_path):
-    opener = FakeOpener([FakeResponse(b"abcdefghij", {"Content-Length": "10"})])
+    opener = FakeOpener(
+        [
+            FakeResponse(b""),
+            FakeResponse(b"abcdefghij", {"Content-Length": "10"}),
+        ]
+    )
     client = GitHubClient(ResponseCache(tmp_path / "cache.json"), opener=opener)
     seen = []
     target = client.download_asset(
@@ -102,3 +108,44 @@ def test_download_asset_rejects_http(tmp_path):
     client = GitHubClient(ResponseCache(tmp_path / "cache.json"), opener=FakeOpener([]))
     with pytest.raises(GitHubApiError):
         client.download_asset("http://example.invalid/app", tmp_path / "app")
+
+
+class RangeResponse(FakeResponse):
+    def __init__(self, body: bytes, content_range: str) -> None:
+        super().__init__(body, {"Content-Range": content_range, "Content-Length": str(len(body))})
+        self.status = 206
+
+
+class RangeOpener:
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.requests: list[urllib.request.Request] = []
+
+    def open(self, request, timeout=...):
+        self.requests.append(request)
+        header = request.get_header("Range") or ""
+        match = re.fullmatch(r"bytes=(\d+)-(\d+)", header)
+        if match:
+            start, end = int(match.group(1)), int(match.group(2))
+            return RangeResponse(
+                self.data[start : end + 1], f"bytes {start}-{end}/{len(self.data)}"
+            )
+        return FakeResponse(self.data, {"Content-Length": str(len(self.data))})
+
+
+def test_download_asset_uses_parallel_ranges_for_large_files(tmp_path):
+    payload = bytes(range(256)) * (9 * 1024 * 1024 // 256)
+    opener = RangeOpener(payload)
+    client = GitHubClient(ResponseCache(tmp_path / "cache.json"), opener=opener)
+    seen: list[tuple[int, int]] = []
+    target = client.download_asset(
+        "https://example.invalid/app.AppImage",
+        tmp_path / "app.AppImage",
+        lambda done, total: seen.append((done, total)),
+    )
+    assert target.read_bytes() == payload
+    range_requests = [request.get_header("Range") for request in opener.requests if request.get_header("Range")]
+    assert range_requests[0] == "bytes=0-0"
+    assert len(range_requests) > 2
+    assert seen[-1] == (len(payload), len(payload))
+

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from PySide6.QtCore import (
@@ -375,11 +376,17 @@ class MainWindow(FramelessWindow):
         def job() -> list[Repository]:
             include_forks = self._settings.include_forks
             payloads = self._client.list_repositories(include_forks=include_forks)
+            names = [str(item.get("name") or "") for item in payloads if isinstance(item, dict)]
             releases: dict[str, dict[str, Any] | None] = {}
-            for payload in payloads:
-                name = str(payload.get("name") or "")
-                if name:
-                    releases[name] = self._client.get_latest_release(name)
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                futures = {
+                    pool.submit(self._client.get_latest_release, name): name for name in names if name
+                }
+                for future in as_completed(futures):
+                    try:
+                        releases[futures[future]] = future.result()
+                    except Exception:  # noqa: BLE001 - one bad repo must not block the list
+                        releases[futures[future]] = None
             return parse_repositories(payloads, releases, include_forks=include_forks)
 
         self._runner.submit(

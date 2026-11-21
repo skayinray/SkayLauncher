@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,7 @@ class ResponseCache:
     def __init__(self, path: str | Path, max_age: float = 300.0) -> None:
         self.path = Path(path)
         self.max_age = max_age
+        self._lock = threading.RLock()
         self._entries: dict[str, dict[str, Any]] = self._load()
 
     def _load(self) -> dict[str, dict[str, Any]]:
@@ -38,10 +40,12 @@ class ResponseCache:
         return entries if isinstance(entries, dict) else {}
 
     def flush(self) -> None:
-        atomic_write_json(self.path, {"schema": 1, "entries": self._entries})
+        with self._lock:
+            atomic_write_json(self.path, {"schema": 1, "entries": dict(self._entries)})
 
     def get(self, key: str) -> CachedResponse | None:
-        entry = self._entries.get(key)
+        with self._lock:
+            entry = self._entries.get(key)
         if not isinstance(entry, dict) or "body" not in entry:
             return None
         return CachedResponse(
@@ -51,9 +55,10 @@ class ResponseCache:
         )
 
     def put(self, key: str, body: Any, etag: str = "") -> CachedResponse:
-        entry = {"body": body, "etag": etag, "stored_at": time.time()}
-        self._entries[key] = entry
-        self.flush()
+        with self._lock:
+            entry = {"body": body, "etag": etag, "stored_at": time.time()}
+            self._entries[key] = entry
+            self.flush()
         return CachedResponse(body=body, etag=etag, stored_at=entry["stored_at"])
 
     def fresh(self, key: str) -> CachedResponse | None:
