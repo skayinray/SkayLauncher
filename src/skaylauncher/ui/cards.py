@@ -11,7 +11,7 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QAction, QColor, QPainter, QPen
+from PySide6.QtGui import QAction, QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -31,6 +31,11 @@ from ..core.platform import choose_asset, current_platform
 from .theme import theme_palette
 
 AssetCheck = Callable[[Release | None], ReleaseAsset | None]
+
+# A card must never be squeezed below the height of its visible content. When
+# the window is small the scroll area should scroll instead of compressing rows.
+CARD_MIN_HEIGHT = 210
+CARD_DESCRIPTION_LINES = 2
 
 
 class AppCard(QFrame):
@@ -53,8 +58,9 @@ class AppCard(QFrame):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("appCard")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.setMinimumWidth(240)
+        self.setMinimumHeight(CARD_MIN_HEIGHT)
         self._translator = translator
         self._asset_check: AssetCheck = asset_check or self._default_asset_check
 
@@ -73,6 +79,8 @@ class AppCard(QFrame):
         self._asset_available = False
         self._busy = False
         self._action = ""
+        self._description_text = ""
+        self._topics_text = ""
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 14)
@@ -93,7 +101,6 @@ class AppCard(QFrame):
         self._description_label = QLabel("", self)
         self._description_label.setObjectName("description")
         self._description_label.setWordWrap(True)
-        self._description_label.setMaximumHeight(36)
         layout.addWidget(self._description_label)
 
         self._topics_label = QLabel("", self)
@@ -172,13 +179,15 @@ class AppCard(QFrame):
         self._name_label.setText(repo.name)
         self._name_label.setToolTip(repo.full_name or repo.name)
         description = repo.description or ""
-        self._description_label.setText(description)
+        self._description_text = description
         self._description_label.setToolTip(description)
         self._description_label.setVisible(bool(description))
 
         topics = "  ".join(f"#{topic}" for topic in repo.topics[:6])
-        self._topics_label.setText(topics)
+        self._topics_text = topics
+        self._topics_label.setToolTip(topics)
         self._topics_label.setVisible(bool(topics))
+        self._elide_text()
 
         if installed is not None:
             self._installed_label.setText(self._translator.tr("version.installed", version=installed.version))
@@ -238,6 +247,52 @@ class AppCard(QFrame):
         if self._repo is None:
             return
         self.set_repo(self._repo, self._installed, self._update_available, self._new)
+
+    @staticmethod
+    def _elide_to_lines(label: QLabel, text: str, max_lines: int) -> None:
+        """Wrap ``text`` to at most ``max_lines`` using the label's current width."""
+
+        if not text:
+            label.setText("")
+            return
+        metrics = QFontMetrics(label.font())
+        available = max(1, label.width())
+        lines: list[str] = []
+        remaining = " ".join(text.split())
+        for _ in range(max_lines):
+            if not remaining:
+                break
+            line = ""
+            for word in remaining.split(" "):
+                candidate = f"{line} {word}".strip()
+                if line and metrics.horizontalAdvance(candidate) > available:
+                    break
+                line = candidate
+            if not line:
+                line = metrics.elidedText(remaining, Qt.ElideRight, available)
+                lines.append(line)
+                remaining = ""
+                break
+            lines.append(line)
+            consumed = len(line)
+            remaining = remaining[consumed:].strip()
+        if remaining:
+            last = lines[-1]
+            suffix = "\u2026"
+            limit = available - metrics.horizontalAdvance(suffix)
+            trimmed = last
+            while trimmed and metrics.horizontalAdvance(trimmed) > limit:
+                trimmed = trimmed[:-1]
+            lines[-1] = f"{trimmed.rstrip()}{suffix}"
+        label.setText("\n".join(lines))
+
+    def _elide_text(self) -> None:
+        self._elide_to_lines(self._description_label, self._description_text, CARD_DESCRIPTION_LINES)
+        self._elide_to_lines(self._topics_label, self._topics_text, 2)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._elide_text()
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)

@@ -1,13 +1,12 @@
-# SkayLauncher 1.0.4
+# SkayLauncher 1.0.5
 
-Faster release downloads on slow GitHub CDN routes.
+Fixes broken card layout in smaller windows.
 
 ## Changes
 
-- Large release assets now use **16 parallel byte-range requests** with 2 MiB segments instead of 8 requests with 4 MiB segments. On a connection where GitHub serves a single stream at 14 KB/s, this raises the effective download rate to roughly 0.9 MB/s.
-- `SKAYLAUNCHER_DOWNLOAD_SEGMENTS` still overrides the default (set it to `1` to disable parallel downloads).
-
-Downloads remain verified with `SHA256SUMS` and the Ed25519 signature after assembly.
+- Cards no longer get squeezed to a fraction of their height when the window is small. The grid now scrolls instead of overlapping cards on top of each other.
+- Long descriptions and topic lists are elided to fit the card width instead of overflowing into neighbouring cards.
+- Added regression tests covering the small-window layout and text elision.
 
 ## Assets
 

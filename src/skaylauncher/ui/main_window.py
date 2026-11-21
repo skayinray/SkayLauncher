@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -47,7 +48,7 @@ from ..core.paths import PathManager
 from ..core.platform import choose_asset
 from ..installer.manager import AppInstaller
 from ..updater.updater import SelfUpdater, UpdateCheck
-from .cards import AppCard
+from .cards import CARD_MIN_HEIGHT, AppCard
 from .dialogs import ReleaseNotesDialog, SettingsDialog, UpdateDialog
 from .theme import build_stylesheet, theme_palette
 from .tray import TrayController
@@ -544,6 +545,16 @@ class MainWindow(FramelessWindow):
             self._grid_layout.addWidget(card, row, column)
         for column in range(self._columns):
             self._grid_layout.setColumnStretch(column, 1)
+
+        # QStackedWidget does not propagate a child layout's size hint to the
+        # QScrollArea. Give the grid page an explicit minimum height so the
+        # scroll area grows instead of squeezing rows and overlapping cards.
+        columns = max(1, self._columns)
+        rows = math.ceil(len(visible) / columns)
+        card_height = max((card.height() for card in self._cards.values()), default=CARD_MIN_HEIGHT)
+        card_height = max(card_height, CARD_MIN_HEIGHT)
+        needed = 4 + rows * card_height + max(0, rows - 1) * CARD_SPACING
+        self._grid_page.setMinimumHeight(needed if visible else 0)
 
     def _select_tab(self, key: str) -> None:
         if key not in TABS or key == self._active_tab:
