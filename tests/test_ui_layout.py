@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QApplication
+try:
+    from PySide6.QtWidgets import QApplication
+except ImportError as error:  # pragma: no cover - depends on host Qt libraries
+    import pytest
+
+    pytest.skip(f"PySide6 is unavailable: {error}", allow_module_level=True)
 
 from skaylauncher.api.cache import ResponseCache
 from skaylauncher.api.github import GitHubClient
