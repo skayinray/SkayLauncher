@@ -1,16 +1,15 @@
-# SkayLauncher 1.0.2
+# SkayLauncher 1.0.3
 
-Performance release for slow GitHub downloads.
+Fixes a startup failure in the Linux AppImage of 1.0.2.
 
 ## Changes
 
-- Large release assets are downloaded with up to eight parallel HTTP byte-range requests, with automatic fallback to a single stream when ranges are unsupported.
-- GitHub release lookups for all repositories now run in parallel instead of one at a time.
-- Download and API caches are thread-safe; partial files are cleaned up after failed or cancelled downloads.
-- Raised the download socket timeout to 60 seconds for slow networks.
-- Added `SKAYLAUNCHER_DOWNLOAD_SEGMENTS=1` to disable parallel downloads for restrictive proxies.
+- Bundles the ICU 73 runtime required by Qt: the 1.0.2 AppImage crashed on startup with `libicui18n.so.73: cannot open shared object file`.
+- Adds an automated AppImage smoke test to the release workflow so a build cannot be published if it fails to start. A matching smoke test checks the Windows executable.
+- Pins `PySide6-Essentials` and `cryptography` so future builds use the same tested versions.
+- Corrects the embedded application version, which was still reported as `1.0.0`.
 
-All downloads are still verified with SHA-256 checksums and the Ed25519 signature after assembly.
+If you installed 1.0.2, download this release and replace it. The 1.0.2 assets are no longer usable on Linux.
 
 ## Assets
 

@@ -65,6 +65,9 @@ jobs:
       - name: Build AppImage
         run: python tools/build_appimage.py "$RUNNER_TEMP/appimagetool.AppImage"
 
+      - name: Smoke-test AppImage
+        run: python tools/smoke_appimage.py SkayLauncher-x86_64.AppImage
+
       - name: Sign AppImage and write checksums
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
@@ -113,6 +116,10 @@ jobs:
       - name: Build with PyInstaller
         shell: bash
         run: pyinstaller SkayLauncher.spec --noconfirm
+
+      - name: Smoke-test Windows build
+        shell: bash
+        run: ./dist/SkayLauncher.exe --version
 
       - name: Sign EXE and write checksums
         working-directory: dist

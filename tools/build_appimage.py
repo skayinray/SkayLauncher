@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tempfile
 import urllib.request
 import zlib
 from collections import deque
@@ -35,8 +36,19 @@ PY_SHORT = f"{sys.version_info.major}.{sys.version_info.minor}"
 APPIMAGETOOL_VERSION = "1.9.1"
 APPIMAGETOOL_SHA256 = "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 
+# Qt 6.8 in the PySide6 wheel links against ICU 73, which is not available on
+# the Ubuntu 22.04 build host or on most target systems. Bundle a pinned copy.
+ICU_DEB_URL = (
+    "https://snapshot.debian.org/archive/debian/20230810T000000Z/"
+    "pool/main/i/icu/libicu73_73.2-1_amd64.deb"
+)
+ICU_DEB_SHA256 = "2ae3e9cb9ff6999c856177c1c49473c4b0d45a41672aca62ed07bf52a2fb0c1d"
+ICU_SONAMES = ("libicudata.so.73", "libicui18n.so.73", "libicuuc.so.73")
+
 QT_MODULES = ("QtCore", "QtGui", "QtWidgets", "QtNetwork")
-QT_LIB_PREFIXES = ("libQt6", "libshiboken6", "libpyside6")
+# Qt links to ICU. The wheel often carries the exact ICU generation it was
+# built against, while build hosts usually have a different one installed.
+QT_LIB_PREFIXES = ("libQt6", "libshiboken6", "libpyside6", "libicu")
 
 # These bindings are never copied. The list documents the deliberate exclusions
 # and guards against adding a module name by mistake.
@@ -78,6 +90,7 @@ STDLIB_EXCLUDES = (
     "pydoc_data",
     "config-*",
     "libpython*.a",
+    "nis*.so",
     "Tools",
 )
 
@@ -479,6 +492,40 @@ def download_appimagetool() -> Path:
     return target
 
 
+def bundled_icu_libraries() -> dict[str, Path]:
+    """Return ICU libraries, fetching a checksummed package once when needed."""
+
+    cache = BUILD / "icu73"
+    if all((cache / name).is_file() for name in ICU_SONAMES):
+        return {name: cache / name for name in ICU_SONAMES}
+
+    deb = BUILD / "libicu73_73.2-1_amd64.deb"
+    BUILD.mkdir(parents=True, exist_ok=True)
+    if not deb.is_file() or _sha256(deb) != ICU_DEB_SHA256:
+        print("downloading pinned ICU 73 runtime")
+        try:
+            with urllib.request.urlopen(ICU_DEB_URL, timeout=120) as response, deb.open("wb") as handle:
+                shutil.copyfileobj(response, handle, 1024 * 1024)
+        except (OSError, ValueError) as error:
+            deb.unlink(missing_ok=True)
+            raise SystemExit(f"cannot download ICU runtime: {error}") from error
+        if _sha256(deb) != ICU_DEB_SHA256:
+            deb.unlink(missing_ok=True)
+            raise SystemExit("ICU runtime SHA-256 mismatch")
+
+    with tempfile.TemporaryDirectory(prefix="skay-icu-") as temporary:
+        root = Path(temporary)
+        subprocess.run(["dpkg-deb", "-x", str(deb), str(root)], check=True)
+        libdir = root / "usr/lib/x86_64-linux-gnu"
+        cache.mkdir(parents=True, exist_ok=True)
+        for soname in ICU_SONAMES:
+            source = libdir / f"{soname}.2"
+            if not source.is_file():
+                raise SystemExit(f"ICU library missing from package: {source.name}")
+            shutil.copy2(source, cache / soname)
+    return {name: cache / name for name in ICU_SONAMES}
+
+
 def resolve_tool(cli_path: str | None, download: bool) -> Path:
     if cli_path:
         tool = Path(cli_path).expanduser().resolve()
@@ -557,6 +604,8 @@ def main(argv: list[str] | None = None) -> int:
     print("[3/6] Qt plugins and native libraries")
     seeds.extend(copy_plugins())
     qt_libs = collect_native_libs(seeds, QT_LIB_PREFIXES)
+    if not any(name.startswith("libicu") for name in qt_libs):
+        qt_libs.update(bundled_icu_libraries())
     openssl_version, openssl_libs = select_openssl_version()
 
     dynload = APPDIR / "usr/lib" / PY_VERSION / "lib-dynload"
