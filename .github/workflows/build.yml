@@ -168,6 +168,7 @@ jobs:
             *) TAG="v$TAG" ;;
           esac
           echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "RELEASE_TITLE=SkayLauncher ${TAG#v}" >> "$GITHUB_ENV"
 
       - name: Download Linux build
         uses: actions/download-artifact@v4
@@ -208,7 +209,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: SkayLauncher ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TITLE }}
           body_path: RELEASE_NOTES.md
           overwrite_files: true
           fail_on_unmatched_files: true

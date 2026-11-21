@@ -240,6 +240,8 @@ class GitHubClient:
             return False
         finally:
             executor.shutdown(wait=True)
+            for segment in segments:
+                segment.unlink(missing_ok=True)
 
     def download_asset(
         self,
@@ -253,15 +255,25 @@ class GitHubClient:
         target.parent.mkdir(parents=True, exist_ok=True)
         part = target.with_name(target.name + ".part")
         part.unlink(missing_ok=True)
+        reported = {"done": 0}
+
+        def report(done: int, total: int) -> None:
+            if progress is None:
+                return
+            done = max(done, reported["done"])
+            reported["done"] = done
+            progress(done, total)
+
+        callback: Callable[[int, int], None] | None = report if progress else None
         try:
             total = self._probe_ranges(url) if self.max_segments > 1 else 0
-            if total >= MIN_SEGMENTED_SIZE and not self._download_segmented(url, part, total, progress):
-                self._stream(url, part, progress)
+            if total >= MIN_SEGMENTED_SIZE and not self._download_segmented(url, part, total, callback):
+                self._stream(url, part, callback)
             else:
-                self._stream(url, part, progress)
-            if progress:
+                self._stream(url, part, callback)
+            if callback:
                 size = part.stat().st_size
-                progress(size, size)
+                callback(size, size)
             part.replace(target)
             return target
         except urllib.error.HTTPError as error:

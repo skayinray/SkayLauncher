@@ -148,4 +148,35 @@ def test_download_asset_uses_parallel_ranges_for_large_files(tmp_path):
     assert range_requests[0] == "bytes=0-0"
     assert len(range_requests) > 2
     assert seen[-1] == (len(payload), len(payload))
+    assert not list(tmp_path.glob("*.part.*"))
+
+
+class FlakyRangeOpener:
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+
+    def open(self, request, timeout=...):
+        header = request.get_header("Range") or ""
+        if header == "bytes=0-0":
+            return RangeResponse(b"x", f"bytes 0-0/{len(self.data)}")
+        if header.startswith("bytes=0-"):
+            return RangeResponse(b"x" * 1024, f"bytes 0-1023/{len(self.data)}")
+        if header:
+            raise urllib.error.HTTPError("url", 500, "range failed", {}, io.BytesIO(b""))
+        return FakeResponse(self.data, {"Content-Length": str(len(self.data))})
+
+
+def test_download_fallback_keeps_progress_monotonic(tmp_path):
+    payload = bytes(range(256)) * (9 * 1024 * 1024 // 256)
+    client = GitHubClient(ResponseCache(tmp_path / "cache.json"), opener=FlakyRangeOpener(payload))
+    seen: list[int] = []
+    target = client.download_asset(
+        "https://example.invalid/app.AppImage",
+        tmp_path / "app.AppImage",
+        lambda done, _total: seen.append(done),
+    )
+    assert target.read_bytes() == payload
+    assert seen and all(later >= earlier for earlier, later in zip(seen, seen[1:]))
+    assert seen[-1] == len(payload)
+    assert not list(tmp_path.glob("*.part*"))
 
