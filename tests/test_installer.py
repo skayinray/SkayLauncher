@@ -61,7 +61,8 @@ def test_install_appimage_sets_executable_and_registers(monkeypatch, tmp_path):
     record = installer.install("app", linux_release())
     assert record.version == "1.2.3"
     assert Path(record.executable).is_file()
-    assert Path(record.executable).stat().st_mode & stat.S_IXUSR
+    if os.name == "posix":
+        assert Path(record.executable).stat().st_mode & stat.S_IXUSR
     assert registry.get("app") == record
 
 
