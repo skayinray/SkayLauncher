@@ -54,7 +54,7 @@ class AppCard(QFrame):
         super().__init__(parent)
         self.setObjectName("appCard")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.setMinimumWidth(310)
+        self.setMinimumWidth(240)
         self._translator = translator
         self._asset_check: AssetCheck = asset_check or self._default_asset_check
 
@@ -268,7 +268,9 @@ class AppCard(QFrame):
         if self._update_available and self._asset_available:
             labels.append(self._translator.tr("badge.update"))
         elif self._installed is not None:
-            labels.append(self._translator.tr("badge.installed"))
+            labels.append(
+                self._translator.tr("badge.discovered" if self._installed.discovered else "badge.installed")
+            )
         if self._new:
             labels.append(self._translator.tr("badge.new"))
         self._badge_label.setText("  ".join(labels))
@@ -324,7 +326,8 @@ class AppCard(QFrame):
             self._add_menu_action(menu, self._translator.tr("menu.open_folder"), self.folder_requested)
             reinstall = self._add_menu_action(menu, self._translator.tr("menu.reinstall"), self.reinstall_requested)
             reinstall.setEnabled(self._asset_available)
-            self._add_menu_action(menu, self._translator.tr("menu.uninstall"), self.uninstall_requested)
+            action_key = "menu.forget" if self._installed.discovered else "menu.uninstall"
+            self._add_menu_action(menu, self._translator.tr(action_key), self.uninstall_requested)
         self._menu_button.setMenu(menu)
 
     def _add_menu_action(self, menu: QMenu, text: str, signal: Signal) -> QAction:

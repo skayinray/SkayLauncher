@@ -13,12 +13,23 @@ SkayLauncher is a desktop launcher for releases published by [skayinray](https:/
 - Downloads release assets over HTTPS with progress reporting and ETag based API caching.
 - Verifies SHA-256 checksums and Ed25519 signatures before an asset is installed.
 - Installs, launches, reinstalls, updates, and removes apps from a local registry.
+- Detects apps installed manually (for example AppImages in `~/Applications`) and offers to launch them.
 - Checks for SkayLauncher updates and applies signed updates in packaged builds.
 - Runs as a single instance and supports minimize to tray with optional notifications.
 - Offers search, filters, patch notes, three themes, and English or Russian interface text.
 - Stores all settings, caches, logs, and installed apps under platform specific user directories.
 
 SkayLauncher reads public GitHub REST API data. An optional GitHub token can be entered in settings to raise the API rate limit. The token is stored locally and is never sent anywhere except GitHub.
+
+## Detecting existing installations
+
+On startup and after every GitHub refresh the launcher scans conventional install locations and matches release assets to repositories:
+
+- Linux: `~/Applications`, `~/.local/share/applications`, `~/.local/bin`, `~/bin`, and `/usr/share/applications`. AppImageLauncher file names such as `SkayClearTux-1.5.3.2-x86_64_<hash>.AppImage` are recognised.
+- Windows: `%LOCALAPPDATA%\Programs`, Desktop, Program Files, and uninstall registry entries.
+- macOS: `/Applications` and `~/Applications` bundles.
+
+Add more directories with `SKAYLAUNCHER_DISCOVERY_DIRS` (a `PATH`-style separator-separated list). Detected apps are marked **FOUND** and can be launched, reinstalled or forgotten. Forgetting an app only removes it from the launcher list; the file on disk is untouched. The window supports custom drag/resize, maximize, and fullscreen with `F11` (`Esc` exits fullscreen).
 
 ## Install from a release
 

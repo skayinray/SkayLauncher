@@ -52,6 +52,7 @@ class TitleBar(QWidget):
 
     minimize_clicked = Signal()
     maximize_clicked = Signal()
+    fullscreen_clicked = Signal()
     close_clicked = Signal()
 
     def __init__(self, title: str = "", parent: QWidget | None = None) -> None:
@@ -79,12 +80,18 @@ class TitleBar(QWidget):
         self._maximize_button.setText("\u25a1")
         self._maximize_button.clicked.connect(self.maximize_clicked.emit)
 
+        self._fullscreen_button = QToolButton(self)
+        self._fullscreen_button.setObjectName("windowButton")
+        self._fullscreen_button.setText("\u26f6")
+        self._fullscreen_button.setToolTip("Fullscreen (F11)")
+        self._fullscreen_button.clicked.connect(self.fullscreen_clicked.emit)
+
         self._close_button = QToolButton(self)
         self._close_button.setObjectName("windowButton")
         self._close_button.setText("\u00d7")
         self._close_button.clicked.connect(self.close_clicked.emit)
 
-        for button in (self._minimize_button, self._maximize_button, self._close_button):
+        for button in (self._minimize_button, self._maximize_button, self._fullscreen_button, self._close_button):
             button.setCursor(Qt.ArrowCursor)
             layout.addWidget(button)
 
@@ -95,6 +102,9 @@ class TitleBar(QWidget):
 
     def set_maximized(self, maximized: bool) -> None:
         self._maximize_button.setText("\u25a0" if maximized else "\u25a1")
+
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        self._fullscreen_button.setText("\u2923" if fullscreen else "\u26f6")
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
@@ -147,7 +157,7 @@ class _CornerResizeFilter(QObject):
         if event_type not in handled:
             return False
         window = self._window
-        if window.isMaximized() or not isinstance(watched, QWidget):
+        if window.isMaximized() or window.isFullScreen() or not isinstance(watched, QWidget):
             return False
         corner = QRect(watched.rect().right() - 18, watched.rect().bottom() - 18, 18, 18)
         position = QPoint() if event_type == QEvent.Leave else _local_pos(event)
@@ -190,7 +200,7 @@ class FramelessWindow(QMainWindow):
         self._root.setObjectName("windowRoot")
         self.setCentralWidget(self._root)
         self._root_layout = QVBoxLayout(self._root)
-        self._root_layout.setContentsMargins(10, 10, 10, 10)
+        self._root_layout.setContentsMargins(8, 8, 8, 8)
         self._root_layout.setSpacing(0)
 
         self._container = QFrame(self._root)
@@ -210,14 +220,15 @@ class FramelessWindow(QMainWindow):
         self._title_bar = TitleBar(title, self._container)
         self._title_bar.minimize_clicked.connect(self.showMinimized)
         self._title_bar.maximize_clicked.connect(self.toggle_maximized)
+        self._title_bar.fullscreen_clicked.connect(self.toggle_fullscreen)
         self._title_bar.close_clicked.connect(self.close)
         container_layout.addWidget(self._title_bar)
 
         self._body_host = QWidget(self._container)
         self._body_host.setObjectName("bodyHost")
         self._body_layout = QVBoxLayout(self._body_host)
-        self._body_layout.setContentsMargins(16, 6, 16, 16)
-        self._body_layout.setSpacing(14)
+        self._body_layout.setContentsMargins(12, 4, 12, 12)
+        self._body_layout.setSpacing(10)
         container_layout.addWidget(self._body_host, 1)
 
         self._resize_filter = _CornerResizeFilter(self)
@@ -244,17 +255,32 @@ class FramelessWindow(QMainWindow):
         self._body_layout.addWidget(widget, 1)
 
     def toggle_maximized(self) -> None:
-        if self.isMaximized():
+        if self.isFullScreen():
             self.showNormal()
-            self._title_bar.set_maximized(False)
+        elif self.isMaximized():
+            self.showNormal()
         else:
             self.showMaximized()
-            self._title_bar.set_maximized(True)
+        self._sync_window_state()
+
+    def toggle_fullscreen(self) -> None:
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+        self._sync_window_state()
+
+    def _sync_window_state(self) -> None:
+        if not hasattr(self, "_title_bar"):
+            return
+        self._title_bar.set_maximized(self.isMaximized())
+        self._title_bar.set_fullscreen(self.isFullScreen())
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.WindowStateChange:
-            margin = 0 if self.isMaximized() else 10
+            margin = 0 if self.isMaximized() or self.isFullScreen() else 8
             self._root_layout.setContentsMargins(margin, margin, margin, margin)
+            self._sync_window_state()
         super().changeEvent(event)
 
 
@@ -364,6 +390,8 @@ def show_toast(parent: QWidget | None, text: str, ok: bool = True, duration: int
     """Create and display a toast anchored to the bottom-right of ``parent``."""
 
     toast = ToastWidget(text, ok, duration, parent)
+    if parent is not None and parent.width() < 420:
+        toast.resize(max(240, parent.width() - 24), toast.height())
     if parent is not None and parent.isVisible():
         corner = parent.mapToGlobal(QPoint(parent.width(), parent.height()))
     else:

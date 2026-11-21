@@ -147,7 +147,7 @@ class SettingsDialog(QDialog):
         self.saved_settings: Settings | None = None
 
         self.setWindowTitle(translator.tr("settings.title"))
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(360)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(22, 20, 22, 18)
         outer.setSpacing(14)

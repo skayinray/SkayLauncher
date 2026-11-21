@@ -93,6 +93,7 @@ class InstalledApp:
     directory: str
     asset: str
     installed_at: str
+    discovered: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -107,6 +108,7 @@ class InstalledApp:
             directory=str(data.get("directory", "")),
             asset=str(data.get("asset", "")),
             installed_at=str(data.get("installed_at", "")),
+            discovered=bool(data.get("discovered", False)),
         )
 
 

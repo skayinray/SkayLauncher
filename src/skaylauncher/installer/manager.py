@@ -158,12 +158,22 @@ class AppInstaller:
         record = self.registry.get(repo)
         if record is None:
             return
+        if record.discovered:
+            # The executable belongs to the user (for example AppImageLauncher).
+            # Only forget it; never delete files outside the launcher data dir.
+            self.registry.remove(repo)
+            return
         directory = Path(record.directory)
-        if directory.is_dir():
+        try:
+            managed_root = self.paths.apps_dir.resolve()
+            within_managed = directory.resolve().is_relative_to(managed_root)
+        except OSError:
+            within_managed = False
+        if within_managed and directory.is_dir():
             shutil.rmtree(directory, ignore_errors=True)
-        parent = directory.parent
-        if parent.is_dir() and not any(parent.iterdir()):
-            parent.rmdir()
+            parent = directory.parent
+            if parent.is_dir() and not any(parent.iterdir()):
+                parent.rmdir()
         self.registry.remove(repo)
 
     def open_folder(self, repo: str) -> bool:

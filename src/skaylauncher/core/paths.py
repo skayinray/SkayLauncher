@@ -68,6 +68,10 @@ class PathManager:
     def known_repos_file(self) -> Path:
         return self.data_dir / "known-repos.json"
 
+    @property
+    def ignored_apps_file(self) -> Path:
+        return self.data_dir / "ignored-apps.json"
+
     def ensure_dirs(self) -> None:
         for directory in (
             self.config_dir,

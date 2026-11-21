@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterable
 
 from .atomic import atomic_write_json
 from .models import InstalledApp
@@ -50,4 +51,24 @@ class InstallRegistry:
     def remove(self, repo: str) -> None:
         apps = self.load()
         if apps.pop(repo.lower(), None) is not None:
+            self.save(apps)
+
+    def sync_discovered(self, found: Iterable[InstalledApp]) -> None:
+        """Merge freshly discovered external installs, preserving managed ones.
+
+        Records marked as ``discovered`` are owned by the discovery scanner. They
+        are replaced when found again and dropped when the executable disappears.
+        Applications installed by the launcher always take precedence.
+        """
+
+        previous = self.load()
+        apps = dict(previous)
+        found_by_repo = {record.repo.lower(): record for record in found if record.repo}
+        for key, record in list(apps.items()):
+            if record.discovered and key not in found_by_repo:
+                apps.pop(key, None)
+        for key, record in found_by_repo.items():
+            if key not in apps or apps[key].discovered:
+                apps[key] = record
+        if apps != previous:
             self.save(apps)

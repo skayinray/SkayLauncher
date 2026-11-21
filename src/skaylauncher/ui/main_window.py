@@ -13,7 +13,7 @@ from PySide6.QtCore import (
     QTimer,
     QUrl,
 )
-from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtGui import QColor, QDesktopServices, QGuiApplication, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -39,6 +39,7 @@ from ..api.releases import parse_repositories
 from ..core.apps import InstallRegistry
 from ..core.atomic import atomic_write_json
 from ..core.config import Settings, SettingsStore
+from ..core.discovery import InstalledAppDiscovery, load_ignored, save_ignored
 from ..core.i18n import Translator
 from ..core.models import InstalledApp, PlatformInfo, Release, ReleaseAsset, Repository, compare_versions
 from ..core.paths import PathManager
@@ -53,6 +54,17 @@ from .widgets import EmptyState, FramelessWindow, show_toast
 from .workers import TaskRunner
 
 TABS = ("all", "installed", "updates")
+CARD_MIN_WIDTH = 240
+CARD_SPACING = 14
+SIDEBAR_WIDE = 232
+SIDEBAR_NARROW = 172
+
+
+def grid_columns(width: int) -> int:
+    """Number of card columns that fit in ``width`` pixels."""
+
+    needed = CARD_MIN_WIDTH + CARD_SPACING
+    return max(1, min(3, (max(0, width) + CARD_SPACING) // needed))
 
 
 class MainWindow(FramelessWindow):
@@ -108,9 +120,14 @@ class MainWindow(FramelessWindow):
         self._known_initialized = self._paths.known_repos_file.exists()
         self._known_repo_ids = self._load_known_ids()
         self._known_releases = self._load_known_releases()
+        self._discovery = InstalledAppDiscovery(platform_info)
 
-        self.setMinimumSize(900, 620)
-        self.resize(1160, 780)
+        self.setMinimumSize(640, 460)
+        screen = QGuiApplication.primaryScreen()
+        available = screen.availableGeometry() if screen is not None else None
+        width = min(1160, available.width() - 48) if available else 1160
+        height = min(780, available.height() - 48) if available else 780
+        self.resize(max(640, width), max(460, height))
         self._build_interface()
         self._apply_stylesheet()
 
@@ -128,6 +145,7 @@ class MainWindow(FramelessWindow):
 
         self._set_status("status.ready")
         QTimer.singleShot(0, self.refresh_repositories)
+        QTimer.singleShot(0, self.discover_installed)
         if self._settings.check_updates_on_start:
             QTimer.singleShot(0, self._check_self_update)
 
@@ -139,11 +157,14 @@ class MainWindow(FramelessWindow):
         main.setObjectName("mainPanel")
         root = QHBoxLayout(main)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(14)
+        root.setSpacing(10)
 
         sidebar = QFrame(main)
+        self._sidebar = sidebar
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(232)
+        sidebar.setMinimumWidth(SIDEBAR_NARROW)
+        sidebar.setMaximumWidth(SIDEBAR_WIDE)
+        sidebar.setFixedWidth(SIDEBAR_WIDE)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(16, 18, 14, 16)
         sidebar_layout.setSpacing(12)
@@ -192,8 +213,8 @@ class MainWindow(FramelessWindow):
 
         right = QWidget(main)
         right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 2, 2, 0)
-        right_layout.setSpacing(12)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(8)
 
         toolbar = QHBoxLayout()
         toolbar.setSpacing(12)
@@ -222,9 +243,9 @@ class MainWindow(FramelessWindow):
 
         grid_page = QWidget(self._view_stack)
         self._grid_layout = QGridLayout(grid_page)
-        self._grid_layout.setContentsMargins(2, 2, 8, 2)
-        self._grid_layout.setHorizontalSpacing(14)
-        self._grid_layout.setVerticalSpacing(14)
+        self._grid_layout.setContentsMargins(2, 2, 4, 2)
+        self._grid_layout.setHorizontalSpacing(CARD_SPACING)
+        self._grid_layout.setVerticalSpacing(CARD_SPACING)
         self._grid_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
         self._empty_state = EmptyState(self._tr("empty.all"), self._view_stack)
@@ -374,6 +395,23 @@ class MainWindow(FramelessWindow):
         self._apply_repositories(repos, new_ids, changed_names)
         self._set_status("status.updated")
         self._update_tray_apps()
+        self.discover_installed()
+
+    def discover_installed(self) -> None:
+        """Find apps installed outside the launcher and refresh their state."""
+        if not self._repos:
+            return
+
+        def job() -> None:
+            ignored = load_ignored(self._paths.ignored_apps_file)
+            found = [
+                record
+                for record in self._discovery.discover(self._repos)
+                if record.repo.lower() not in ignored
+            ]
+            self._registry.sync_discovered(found)
+
+        self._runner.submit(job, on_result=lambda _result: self._reload_states())
 
     def _on_refresh_error(self, message: str) -> None:
         self._refresh_active = False
@@ -613,10 +651,12 @@ class MainWindow(FramelessWindow):
         self._runner.submit(task, on_result=on_done, on_error=self._on_generic_error)
 
     def _uninstall_app(self, name: str) -> None:
+        record = self._registry.get(name)
+        key = "confirm.forget" if record is not None and record.discovered else "confirm.uninstall"
         answer = QMessageBox.question(
             self,
             self._tr("confirm.title"),
-            self._tr("confirm.uninstall", name=name),
+            self._tr(key, name=name),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -624,6 +664,10 @@ class MainWindow(FramelessWindow):
             return
 
         def task() -> None:
+            if record is not None and record.discovered:
+                ignored = load_ignored(self._paths.ignored_apps_file)
+                ignored.add(name.lower())
+                save_ignored(self._paths.ignored_apps_file, ignored)
             self._installer.uninstall(name)
 
         def on_done(_result: None) -> None:
@@ -774,11 +818,32 @@ class MainWindow(FramelessWindow):
         super().resizeEvent(event)
         if not hasattr(self, "_grid_page"):
             return
-        width = self._grid_page.width() or self.width()
-        columns = 3 if width >= 1040 else 2 if width >= 660 else 1
+        width = self.width()
+        sidebar_width = (
+            SIDEBAR_WIDE if width >= 1100 else SIDEBAR_NARROW + 28 if width >= 820 else SIDEBAR_NARROW
+        )
+        if self._sidebar.width() != sidebar_width:
+            self._sidebar.setFixedWidth(sidebar_width)
+        self._count_label.setVisible(width >= 760)
+        margins = self._root_layout.contentsMargins()
+        body = self._body_layout.contentsMargins()
+        chrome = margins.left() + margins.right() + 2 + body.left() + body.right() + 12 + 12
+        available = max(0, width - chrome - sidebar_width)
+        columns = grid_columns(available)
         if columns != self._columns:
             self._columns = columns
             self._relayout_grid()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key_F11:
+            self.toggle_fullscreen()
+            event.accept()
+            return
+        if event.key() == Qt.Key_Escape and self.isFullScreen():
+            self.toggle_fullscreen()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 __all__ = ["MainWindow"]
